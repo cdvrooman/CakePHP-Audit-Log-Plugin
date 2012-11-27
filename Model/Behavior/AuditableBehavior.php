@@ -13,6 +13,13 @@ class AuditableBehavior extends ModelBehavior {
   private $_original = array();
 
   /**
+	 * Property to allow for explicit enabling and disabling of the behavior.
+	 *
+	 * @var		boolean
+	 */
+	public $enabled = true;
+
+  /**
    * Initiate behavior for the model using specified settings.
    *
    * Available settings:
@@ -65,7 +72,7 @@ class AuditableBehavior extends ModelBehavior {
   public function beforeSave( Model $Model ) {
     # If we're editing an existing object, save off a copy of
     # the object as it exists before any changes.
-    if( !empty( $Model->id ) ) {
+    if ( $this->enabled && !empty( $Model->id ) ) {
       $this->_original[$Model->alias] = $this->_getModelData( $Model );
     }
     
@@ -79,14 +86,16 @@ class AuditableBehavior extends ModelBehavior {
    * @return	boolean
    */
   public function beforeDelete( Model $Model, $cascade = true ) {
-    $original = $Model->find(
-      'first',
-      array(
-        'contain'    => false,
-        'conditions' => array( $Model->alias . '.' . $Model->primaryKey => $Model->id ),
-      )
-    );
-    $this->_original[$Model->alias] = $original[$Model->alias];
+    if ( $this->enabled ) {
+      $original = $Model->find(
+        'first',
+        array(
+          'contain'    => false,
+          'conditions' => array( $Model->alias . '.' . $Model->primaryKey => $Model->id ),
+        )
+      );
+      $this->_original[$Model->alias] = $original[$Model->alias];
+    }
     
     return true;
   }
@@ -100,6 +109,10 @@ class AuditableBehavior extends ModelBehavior {
    * @return  void
    */
   public function afterSave( Model $Model, $created ) {
+    if ( $this->enabled === false ) {
+  		return true;
+  	}
+
     $audit = array( $Model->alias => $this->_getModelData( $Model ) );
     $audit[$Model->alias][$Model->primaryKey] = $Model->id;
 
@@ -231,6 +244,10 @@ class AuditableBehavior extends ModelBehavior {
    * @return	void
    */
   public function afterDelete( Model $Model ) {
+    if ( $this->enabled === false ) {
+  		return true;
+  	}
+
     /*
      * If a currentUser() method exists in the model class (or, of
      * course, in a superclass) the call that method to pull all user
