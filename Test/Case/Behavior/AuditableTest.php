@@ -127,7 +127,36 @@ class AuditableBehaviorTest extends CakeTestCase {
     
     #Verify that no delta record was created.
     $this->assertTrue( empty( $deltas ) );
-  }
+ 
+   # Verify explicitly disabling the behavior and afterSave.
+  	$this->Article->Behaviors->Auditable->enabled = false;
+
+    $new_article = array(
+      'Article' => array(
+        'user_id'   => 99,
+        'author_id' => 1,
+        'title'     => 'Do Not Publish Test Article',
+        'body'      => 'Do Not Publish Test Article Body',
+        'published' => 'N',
+      ),
+    );
+
+		$this->Article->create();
+    $this->Article->save( $new_article );
+    $audit = ClassRegistry::init( 'Audit' )->find(
+      'first',
+      array(
+        'recursive'  => -1,
+        'conditions'        => array(
+          'Audit.event'     => 'CREATE',
+          'Audit.model'     => 'Article',
+          'Audit.entity_id' => $this->Article->getLastInsertId()
+        )
+      )
+    );
+    $this->assertEmpty( $audit );
+		$this->Article->Behaviors->Auditable->enabled = true;
+ }
 
   /** 
    * Test saving multiple records with Model::saveAll()
@@ -376,6 +405,58 @@ class AuditableBehaviorTest extends CakeTestCase {
     
     # No delta should be reported against the ignored field.
     $this->assertIdentical( array(), Set::extract( '/AuditDelta[property_name=ignored_field]', $last_audit ) );
+
+   # Verify explicitly disabling the behavior prevents the creation of a delta.
+  	$this->Article->create();
+
+    $new_article = array(
+      'Article' => array(
+        'user_id'       => 1,
+        'author_id'     => 1,
+        'title'         => 'No Delta Test Article',
+        'body'          => 'No Delta Test Article Body',
+        'ignored_field' => 1,
+        'published'     => 'N',
+      ),
+    );
+
+    $this->Article->save( $new_article );
+
+		$this->Article->Behaviors->Auditable->enabled = false;
+
+    $this->Article->saveField( 'title', 'No Delta (Edited)' );
+
+    $audit_records = $this->Audit->find(
+      'all',
+      array(
+        'recursive' => 0,
+        'conditions' => array(
+          'Audit.model' => 'Article',
+          'Audit.entity_id' => $this->Article->getLastInsertId()
+        )
+      )
+    );
+    $delta_records = $this->AuditDelta->find(
+      'all',
+      array(
+        'recursive' => -1,
+        'conditions' => array( 'AuditDelta.audit_id' => Set::extract( '/Audit/id', $audit_records ) ),
+      )
+    );
+
+    $create_audit = Set::extract( '/Audit[event=CREATE]', $audit_records );
+    $update_audit = Set::extract( '/Audit[event=EDIT]', $audit_records );
+
+    # There should be only 1 CREATE record
+    $this->assertEquals( 1, count( $audit_records ) );
+
+    # There should be one audit record for the create event.
+    $this->assertEquals( 1, count( $create_audit ) );
+    $this->assertEmpty( $update_audit );
+
+    # No delta record should have been saved
+    $this->assertEmpty( $delta_records );
+		$this->Article->Behaviors->Auditable->enabled = true;
   }
   
   public function testIgnoredField() {
@@ -443,5 +524,34 @@ class AuditableBehaviorTest extends CakeTestCase {
     );
     
     $this->assertEqual( 1, count( $last_audit ) );
+
+   # Verify explicitly disabling the behavior and afterDelete.
+  	$this->Article->Behaviors->Auditable->enabled = false;
+
+    $article = $this->Article->find(
+      'first',
+      array(
+        'contain' => false,
+        'order'   => array( 'rand()' ),
+      )
+    );
+
+    $id = $article['Article']['id'];
+
+    $this->Article->delete( $id );
+
+    $last_audit = $this->Audit->find(
+      'all',
+      array(
+        'conditions' => array(
+          'Audit.event'     => 'DELETE',
+          'Audit.model'     => 'Article',
+          'Audit.entity_id' => $id,
+        ),
+        'order' => 'Audit.created DESC',
+      )
+    );
+    $this->assertEmpty( $last_audit );
+		$this->Article->Behaviors->Auditable->enabled = true;
   }
 }
