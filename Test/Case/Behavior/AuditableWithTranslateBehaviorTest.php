@@ -394,12 +394,15 @@ class TranslateBehaviorTest extends CakeTestCase {
  *
  * @return void
  */
-/*
 	public function testMultipleCreate() {
 		$this->loadFixtures('Audit', 'AuditDelta', 'AuditableTranslate', 'AuditableTranslatedItem');
 
 		$TestModel = new AuditableTranslatedItem();
-		$TestModel->locale = 'deu';
+
+		// Note: this explicit locale has to be one of the locales saved because Auditable looks for an existing
+		// AuditableTranslatedItem record after the translations have been saved and if none matches
+		// the specified $TestModel->locale, then trying to save the Audit record will cause an error.
+		$TestModel->locale = 'eng';
 		$data = array(
 			'slug' => 'new_translated',
 			'title' => array('eng' => 'New title', 'spa' => 'Nuevo leyenda'),
@@ -434,7 +437,6 @@ class TranslateBehaviorTest extends CakeTestCase {
 		);
 		$this->assertEquals($expected, $result);
 	}
-*/
 
 /**
  * testMultipleUpdate method
